@@ -1,0 +1,47 @@
+[
+  {
+    "id": "job_001",
+    "title": "Thực tập sinh Flutter",
+    "companyName": "ABC Tech",
+    "location": "TP.HCM",
+    "salaryText": "3 - 5 triệu",
+    "jobType": "internship",
+    "category": "Mobile Developer",
+    "description": "Tham gia phát triển ứng dụng Flutter, fix bug, hỗ trợ UI.",
+    "requirements": "Biết Dart/Flutter cơ bản, tinh thần học hỏi tốt.",
+    "benefits": "Hỗ trợ dấu mộc, phụ cấp, mentoring 1-1.",
+    "applyType": "internal",
+    "source": "manual",
+    "applyUrl": ""
+  },
+  {
+    "id": "job_002",
+    "title": "Part-time Content Marketing",
+    "companyName": "Campus Media",
+    "location": "TP.HCM",
+    "salaryText": "25k/giờ",
+    "jobType": "part-time",
+    "category": "Marketing",
+    "description": "Viết nội dung fanpage, hỗ trợ kế hoạch truyền thông.",
+    "requirements": "Có kỹ năng viết, ưu tiên sinh viên năm 2-3.",
+    "benefits": "Làm việc linh hoạt, đào tạo kỹ năng marketing.",
+    "applyType": "internal",
+    "source": "manual",
+    "applyUrl": ""
+  },
+  {
+    "id": "job_003",
+    "title": "Remote Frontend Intern",
+    "companyName": "Global Startup",
+    "location": "Remote",
+    "salaryText": "Negotiable",
+    "jobType": "internship",
+    "category": "Frontend",
+    "description": "Hỗ trợ code giao diện web, làm việc với mentor quốc tế.",
+    "requirements": "Biết HTML/CSS/JS, đọc hiểu tài liệu tiếng Anh.",
+    "benefits": "Remote, flexible, exposure to real product.",
+    "applyType": "webview",
+    "source": "api",
+    "applyUrl": "https://example.com/jobs/remote-frontend-intern"
+  }
+]

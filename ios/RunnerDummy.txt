@@ -1,0 +1,1 @@
+Mở project này bằng flutter create chuẩn nếu bạn cần build iOS.
