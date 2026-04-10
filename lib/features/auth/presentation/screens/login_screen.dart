@@ -35,10 +35,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    if (!AppConfig.useFirebase) {
+    if (!AppConfig.isFirebaseEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Firebase đang tắt. Bật AppConfig.useFirebase để đăng nhập thật.'),
+          content: Text('Firebase chưa sẵn sàng. Kiểm tra cấu hình Firebase rồi thử lại.'),
         ),
       );
       return;
@@ -68,6 +68,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(currentUserProvider);
+    if (AppConfig.isFirebaseEnabled && user != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.go('/home');
+        }
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Đăng nhập')),
       body: ListView(

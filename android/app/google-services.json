@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "926953805411",
+    "project_id": "student-job-app-1d837",
+    "storage_bucket": "student-job-app-1d837.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926953805411:android:b67167446b7311f621ca56",
+        "android_client_info": {
+          "package_name": "com.example.student_job_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnBMVBONwiGkUsDMNv0vSy6hp6Tp7Xdvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

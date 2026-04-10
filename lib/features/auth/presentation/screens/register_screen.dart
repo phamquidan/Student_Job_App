@@ -38,10 +38,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
       return;
     }
-    if (!AppConfig.useFirebase) {
+    if (!AppConfig.isFirebaseEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Firebase đang tắt. Bật AppConfig.useFirebase để đăng ký thật.'),
+          content: Text('Firebase chưa sẵn sàng. Kiểm tra cấu hình Firebase rồi thử lại.'),
         ),
       );
       return;

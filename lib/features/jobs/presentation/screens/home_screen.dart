@@ -122,14 +122,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       drawer: Drawer(
         child: ListView(
           children: [
-            const DrawerHeader(
-              child: Center(
-                child: Text('Student Job App', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            DrawerHeader(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Student Job App', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(
+                    user != null ? (user.email ?? 'Đã đăng nhập') : 'Chưa đăng nhập',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
             ),
-            ListTile(leading: const Icon(Icons.login), title: const Text('Đăng nhập'), onTap: () => context.push('/login')),
-            ListTile(leading: const Icon(Icons.app_registration), title: const Text('Đăng ký'), onTap: () => context.push('/register')),
-            if (AppConfig.useFirebase && user != null)
+            if (!AppConfig.isFirebaseEnabled || user == null)
+              ListTile(leading: const Icon(Icons.login), title: const Text('Đăng nhập'), onTap: () => context.push('/login')),
+            if (!AppConfig.isFirebaseEnabled || user == null)
+              ListTile(leading: const Icon(Icons.app_registration), title: const Text('Đăng ký'), onTap: () => context.push('/register')),
+            if (AppConfig.isFirebaseEnabled && user != null)
               ListTile(
                 leading: const Icon(Icons.logout),
                 title: const Text('Đăng xuất'),
@@ -137,6 +148,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   await ref.read(authServiceProvider).signOut();
                   if (!context.mounted) return;
                   context.pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Đã đăng xuất.')),
+                  );
                 },
               ),
             ListTile(leading: const Icon(Icons.work_outline), title: const Text('Quản lý bài đăng'), onTap: () => context.push('/recruiter/manage-posts')),

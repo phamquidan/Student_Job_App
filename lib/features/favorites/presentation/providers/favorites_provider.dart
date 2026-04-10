@@ -16,7 +16,7 @@ final favoritesProvider = StateNotifierProvider<FavoritesNotifier, AsyncValue<Se
 
 class FavoritesNotifier extends StateNotifier<AsyncValue<Set<String>>> {
   FavoritesNotifier() : super(const AsyncValue.loading()) {
-    if (AppConfig.useFirebase) {
+    if (AppConfig.isFirebaseEnabled) {
       _authSub = _auth.authStateChanges().listen((_) => load());
     }
     load();
@@ -28,7 +28,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<Set<String>>> {
 
   Future<void> load() async {
     try {
-      if (AppConfig.useFirebase && _auth.currentUser != null) {
+      if (AppConfig.isFirebaseEnabled && _auth.currentUser != null) {
         state = AsyncValue.data(await _loadFromFirestore(_auth.currentUser!.uid));
       } else {
         state = AsyncValue.data(await _loadFromLocal());
@@ -48,7 +48,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<Set<String>>> {
     }
     state = AsyncValue.data(current);
 
-    if (AppConfig.useFirebase && _auth.currentUser != null) {
+    if (AppConfig.isFirebaseEnabled && _auth.currentUser != null) {
       final doc = _firestore.collection('users').doc(_auth.currentUser!.uid).collection('favorites').doc(job.id);
       if (wasFavorite) {
         await doc.delete();

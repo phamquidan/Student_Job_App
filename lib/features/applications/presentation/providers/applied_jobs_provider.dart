@@ -23,7 +23,7 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
   StreamSubscription<User?>? _authSub;
 
   AppliedJobsNotifier() : super(const AsyncValue.loading()) {
-    if (AppConfig.useFirebase) {
+    if (AppConfig.isFirebaseEnabled) {
       _authSub = _auth.authStateChanges().listen((_) => _load());
     }
     _load();
@@ -61,7 +61,7 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
   }
 
   Future<List<AppliedJobModel>> _loadItems() async {
-    if (AppConfig.useFirebase && _auth.currentUser != null) {
+    if (AppConfig.isFirebaseEnabled && _auth.currentUser != null) {
       final uid = _auth.currentUser!.uid;
       final snapshot = await _firestore
           .collection('users')
@@ -100,7 +100,7 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
     String? deleteApplicationId,
     bool clearAll = false,
   }) async {
-    if (AppConfig.useFirebase && _auth.currentUser != null) {
+    if (AppConfig.isFirebaseEnabled && _auth.currentUser != null) {
       final uid = _auth.currentUser!.uid;
       final collection = _firestore.collection('users').doc(uid).collection('applications');
       if (clearAll) {

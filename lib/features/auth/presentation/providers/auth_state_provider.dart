@@ -13,7 +13,7 @@ final authServiceProvider = Provider<AuthService>((ref) {
 });
 
 final authStateProvider = StreamProvider<User?>((ref) {
-  if (!AppConfig.useFirebase) {
+  if (!AppConfig.isFirebaseEnabled) {
     return Stream<User?>.value(null);
   }
   return ref.watch(authServiceProvider).authStateChanges();
