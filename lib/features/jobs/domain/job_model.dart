@@ -12,6 +12,7 @@ class JobModel {
   final String source;
   final String applyType;
   final String applyUrl;
+  final String createdBy;
 
   const JobModel({
     required this.id,
@@ -27,6 +28,7 @@ class JobModel {
     required this.source,
     required this.applyType,
     required this.applyUrl,
+    this.createdBy = '',
   });
 
   factory JobModel.fromMap(Map<String, dynamic> map) {
@@ -44,6 +46,7 @@ class JobModel {
       source: map['source']?.toString() ?? 'manual',
       applyType: map['applyType']?.toString() ?? 'internal',
       applyUrl: map['applyUrl']?.toString() ?? '',
+      createdBy: map['createdBy']?.toString() ?? '',
     );
   }
 }

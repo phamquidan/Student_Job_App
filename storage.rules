@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isRecruiter() {
+      return signedIn()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'recruiter';
+    }
+
+    // User CV files: /cvs/{uid}/{file}
+    match /cvs/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isRecruiter();
+      allow write: if isOwner(userId);
+    }
+  }
+}

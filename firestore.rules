@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function userRole() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isRecruiter() {
+      return userRole() == 'recruiter';
+    }
+
+    function ownsJob(jobId) {
+      return signedIn()
+        && isRecruiter()
+        && get(/databases/$(database)/documents/jobs/$(jobId)).data.createdBy == request.auth.uid;
+    }
+
+    // Publicly readable open jobs.
+    match /jobs/{jobId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && isRecruiter()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'open';
+      allow update, delete: if signedIn()
+        && (
+          resource.data.createdBy == request.auth.uid
+          || isRecruiter()
+        );
+    }
+
+    match /applications/{applicationId} {
+      allow read: if signedIn()
+        && (
+          resource.data.userId == request.auth.uid
+          || ownsJob(resource.data.jobId)
+        );
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && (
+          resource.data.userId == request.auth.uid
+          || ownsJob(resource.data.jobId)
+        );
+      allow delete: if signedIn()
+        && (
+          resource.data.userId == request.auth.uid
+          || ownsJob(resource.data.jobId)
+        );
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if isOwner(userId);
+      allow delete: if false;
+
+      match /favorites/{favoriteId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /applications/{applicationId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /cvs/{cvId} {
+        allow read: if isOwner(userId) || isRecruiter();
+        allow write: if isOwner(userId);
+      }
+    }
+  }
+}
