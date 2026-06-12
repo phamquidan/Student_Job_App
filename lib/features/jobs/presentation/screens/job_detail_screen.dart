@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +15,8 @@ import '../../../applications/presentation/providers/applied_jobs_provider.dart'
 import '../../../auth/presentation/providers/auth_state_provider.dart';
 import '../../../favorites/presentation/providers/favorites_provider.dart';
 import '../../domain/job_model.dart';
+import '../../../recruiter/presentation/providers/recruiter_jobs_provider.dart';
+import '../providers/jobs_provider.dart';
 
 class JobDetailScreen extends ConsumerWidget {
   final JobModel job;
@@ -41,6 +44,10 @@ class JobDetailScreen extends ConsumerWidget {
     final isFavorite = favoriteIds.contains(job.id);
     final topPad = MediaQuery.paddingOf(context).top;
 
+    final currentUser = ref.watch(currentUserProvider);
+    final isRecruiter = ref.watch(isRecruiterProvider);
+    final isMyJob = currentUser != null && isRecruiter && job.createdBy == currentUser.uid;
+
     return Scaffold(
       backgroundColor: StitchColors.background,
       extendBodyBehindAppBar: true,
@@ -54,6 +61,62 @@ class JobDetailScreen extends ConsumerWidget {
                   topPadding: topPad,
                   onBack: () => Navigator.of(context).pop(),
                   onShare: () {},
+                  isMyJob: isMyJob,
+                  jobStatus: job.status,
+                  onEdit: () => context.push(AppRoutes.recruiterPostJob, extra: job),
+                  onToggleStatus: () async {
+                    try {
+                      final newStatus = job.status == 'open' ? 'closed' : 'open';
+                      await ref.read(recruiterJobsRepositoryProvider).updateJobStatus(job.id, newStatus);
+                      ref.invalidate(jobsProvider);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(newStatus == 'closed' ? 'Đã đóng nhận hồ sơ.' : 'Đã mở lại nhận hồ sơ.')),
+                      );
+                      context.pop();
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Lỗi: $e')),
+                      );
+                    }
+                  },
+                  onDelete: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Xác nhận xóa'),
+                        content: const Text('Bạn có chắc chắn muốn xóa tin tuyển dụng này? Hành động này không thể hoàn tác.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Hủy'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: TextButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('Xóa'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      try {
+                        await ref.read(recruiterJobsRepositoryProvider).deleteJob(job.id);
+                        ref.invalidate(jobsProvider);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Đã xóa tin tuyển dụng.')),
+                        );
+                        context.pop();
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Xóa thất bại: $e')),
+                        );
+                      }
+                    }
+                  },
                 ),
               ),
               SliverToBoxAdapter(
@@ -71,11 +134,11 @@ class JobDetailScreen extends ConsumerWidget {
                             decoration: BoxDecoration(
                               color: StitchColors.surfaceContainerLowest,
                               borderRadius: BorderRadius.circular(14),
-                              boxShadow: [
+                              boxShadow: const [
                                 BoxShadow(
                                   color: StitchColors.ambientShadow,
                                   blurRadius: 20,
-                                  offset: const Offset(0, 6),
+                                  offset: Offset(0, 6),
                                 ),
                               ],
                             ),
@@ -127,8 +190,8 @@ class JobDetailScreen extends ConsumerWidget {
                         decoration: BoxDecoration(
                           color: StitchColors.surfaceContainerLowest,
                           borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(color: StitchColors.ambientShadow, blurRadius: 24, offset: const Offset(0, 10)),
+                          boxShadow: const [
+                            BoxShadow(color: StitchColors.ambientShadow, blurRadius: 24, offset: Offset(0, 10)),
                           ],
                         ),
                         child: Column(
@@ -208,9 +271,16 @@ class JobDetailScreen extends ConsumerWidget {
           _BottomActionBar(
             canApplyInternal: canApplyInternal,
             isFavorite: isFavorite,
+            isMyJob: isMyJob,
+            onEdit: () => context.push(AppRoutes.recruiterPostJob, extra: job),
             onApply: () async {
+              if (isMyJob) {
+                context.push(AppRoutes.recruiterApplicants, extra: job.id);
+                return;
+              }
               if (canApplyInternal) {
-                if (AppConfig.isFirebaseEnabled && ref.read(currentUserProvider) == null) {
+                final user = ref.read(currentUserProvider);
+                if (AppConfig.isFirebaseEnabled && user == null) {
                   ref.read(pendingApplyJobProvider.notifier).state = job;
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -224,7 +294,152 @@ class JobDetailScreen extends ConsumerWidget {
                       data: (items) => items.any((item) => item.jobId == job.id),
                       orElse: () => false,
                     );
-                final applied = await ref.read(appliedJobsProvider.notifier).apply(job);
+                if (wasApplied) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(AppStrings.applyAlreadySubmitted)),
+                  );
+                  return;
+                }
+
+                // Check user's CVs in Firestore
+                List<Map<String, dynamic>> userCvs = [];
+                if (AppConfig.isFirebaseEnabled && user != null) {
+                  // Show loading dialog
+                  showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (ctx) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                  
+                  try {
+                    final snapshot = await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('cvs')
+                        .orderBy('uploadedAt', descending: true)
+                        .get();
+                    
+                    userCvs = snapshot.docs.map((doc) => {
+                      'id': doc.id,
+                      ...doc.data(),
+                    }).toList();
+                  } catch (e) {
+                    // Ignore
+                  } finally {
+                    if (context.mounted) {
+                      Navigator.pop(context); // Close loading dialog
+                    }
+                  }
+                  
+                  if (userCvs.isEmpty) {
+                    if (!context.mounted) return;
+                    final uploadNow = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Chưa có tài liệu CV'),
+                        content: const Text('Bạn chưa tải lên CV nào trong hồ sơ cá nhân. Vui lòng tải lên CV trước khi ứng tuyển.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Hủy'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Tải lên ngay'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (uploadNow == true && context.mounted) {
+                      context.push(AppRoutes.uploadCv);
+                    }
+                    return;
+                  }
+                }
+
+                // If userCvs is not empty, show bottom sheet to select CV
+                Map<String, dynamic>? selectedCv;
+                if (userCvs.isNotEmpty) {
+                  if (!context.mounted) return;
+                  selectedCv = await showModalBottomSheet<Map<String, dynamic>>(
+                    context: context,
+                    backgroundColor: StitchColors.surfaceContainerLowest,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    builder: (ctx) {
+                      return SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                              child: Text(
+                                'Chọn CV để ứng tuyển',
+                                style: GoogleFonts.manrope(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 1),
+                            Flexible(
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: userCvs.length,
+                                itemBuilder: (ctx, index) {
+                                  final cv = userCvs[index];
+                                  final name = cv['name']?.toString() ?? 'CV';
+                                  final isPrimary = cv['isPrimary'] == true;
+                                  return ListTile(
+                                    leading: Icon(
+                                      Icons.description_outlined,
+                                      color: isPrimary ? StitchColors.primary : StitchColors.onSurfaceVariant,
+                                    ),
+                                    title: Text(
+                                      name,
+                                      style: GoogleFonts.inter(
+                                        fontWeight: isPrimary ? FontWeight.w700 : FontWeight.w500,
+                                      ),
+                                    ),
+                                    trailing: isPrimary
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: StitchColors.secondaryContainer,
+                                              borderRadius: BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              'CHÍNH',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w800,
+                                                color: StitchColors.onSecondaryContainer,
+                                              ),
+                                            ),
+                                          )
+                                        : null,
+                                    onTap: () {
+                                      Navigator.pop(ctx, cv);
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                  if (selectedCv == null) return; // User cancelled CV selection
+                }
+
+                if (!context.mounted) return;
+                final applied = await ref.read(appliedJobsProvider.notifier).apply(job, selectedCv: selectedCv);
                 if (!context.mounted) return;
                 if (!applied) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -233,10 +448,8 @@ class JobDetailScreen extends ConsumerWidget {
                   return;
                 }
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      wasApplied ? AppStrings.applyAlreadySubmitted : AppStrings.applySuccess,
-                    ),
+                  const SnackBar(
+                    content: Text(AppStrings.applySuccess),
                   ),
                 );
               } else {
@@ -294,8 +507,8 @@ class JobDetailScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: const Offset(0, 6)),
+        boxShadow: const [
+          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -345,11 +558,25 @@ class JobDetailScreen extends ConsumerWidget {
 }
 
 class _DetailHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _DetailHeaderDelegate({required this.topPadding, required this.onBack, required this.onShare});
+  _DetailHeaderDelegate({
+    required this.topPadding,
+    required this.onBack,
+    required this.onShare,
+    this.isMyJob = false,
+    this.jobStatus = 'open',
+    this.onEdit,
+    this.onToggleStatus,
+    this.onDelete,
+  });
 
   final double topPadding;
   final VoidCallback onBack;
   final VoidCallback onShare;
+  final bool isMyJob;
+  final String jobStatus;
+  final VoidCallback? onEdit;
+  final VoidCallback? onToggleStatus;
+  final VoidCallback? onDelete;
 
   static const double _h = 52;
 
@@ -365,7 +592,7 @@ class _DetailHeaderDelegate extends SliverPersistentHeaderDelegate {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: DecoratedBox(
-          decoration: BoxDecoration(color: StitchColors.glassBar),
+          decoration: const BoxDecoration(color: StitchColors.glassBar),
           child: Padding(
             padding: EdgeInsets.only(top: topPadding, left: 8, right: 12),
             child: SizedBox(
@@ -386,11 +613,58 @@ class _DetailHeaderDelegate extends SliverPersistentHeaderDelegate {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    onPressed: onShare,
-                    icon: const Icon(Icons.share_outlined),
-                    color: StitchColors.onSurfaceVariant,
-                  ),
+                  if (isMyJob) ...[
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: StitchColors.onSurfaceVariant),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          onEdit?.call();
+                        } else if (value == 'status') {
+                          onToggleStatus?.call();
+                        } else if (value == 'delete') {
+                          onDelete?.call();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 20),
+                              SizedBox(width: 8),
+                              Text('Chỉnh sửa tin'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'status',
+                          child: Row(
+                            children: [
+                              Icon(jobStatus == 'open' ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+                              const SizedBox(width: 8),
+                              Text(jobStatus == 'open' ? 'Đóng tuyển dụng' : 'Mở lại tuyển dụng'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                              SizedBox(width: 8),
+                              Text('Xóa tin đăng', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    IconButton(
+                      onPressed: onShare,
+                      icon: const Icon(Icons.share_outlined),
+                      color: StitchColors.onSurfaceVariant,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -402,7 +676,9 @@ class _DetailHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(covariant _DetailHeaderDelegate oldDelegate) {
-    return oldDelegate.topPadding != topPadding;
+    return oldDelegate.topPadding != topPadding ||
+        oldDelegate.isMyJob != isMyJob ||
+        oldDelegate.jobStatus != jobStatus;
   }
 }
 
@@ -412,12 +688,16 @@ class _BottomActionBar extends StatelessWidget {
     required this.isFavorite,
     required this.onApply,
     required this.onToggleFavorite,
+    this.isMyJob = false,
+    this.onEdit,
   });
 
   final bool canApplyInternal;
   final bool isFavorite;
   final Future<void> Function() onApply;
   final VoidCallback onToggleFavorite;
+  final bool isMyJob;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -440,7 +720,7 @@ class _BottomActionBar extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      gradient: StitchColors.ctaGradient,
+                      gradient: isMyJob ? StitchColors.brandGradient : StitchColors.ctaGradient,
                     ),
                     child: Material(
                       color: Colors.transparent,
@@ -448,10 +728,12 @@ class _BottomActionBar extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         onTap: onApply,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                           padding: const EdgeInsets.symmetric(vertical: 16),
                           child: Center(
                             child: Text(
-                              canApplyInternal ? 'Ứng tuyển ngay' : 'Mở link ứng tuyển',
+                              isMyJob
+                                  ? 'Quản lý ứng viên'
+                                  : (canApplyInternal ? 'Ứng tuyển ngay' : 'Mở link ứng tuyển'),
                               style: GoogleFonts.manrope(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 16,
@@ -470,13 +752,15 @@ class _BottomActionBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(999),
-                    onTap: onToggleFavorite,
+                    onTap: isMyJob ? onEdit : onToggleFavorite,
                     child: SizedBox(
                       width: 52,
                       height: 52,
                       child: Icon(
-                        isFavorite ? Icons.bookmark : Icons.bookmark_border,
-                        color: StitchColors.onSurfaceVariant,
+                        isMyJob
+                            ? Icons.edit_note_rounded
+                            : (isFavorite ? Icons.bookmark : Icons.bookmark_border),
+                        color: isMyJob ? StitchColors.primary : StitchColors.onSurfaceVariant,
                       ),
                     ),
                   ),

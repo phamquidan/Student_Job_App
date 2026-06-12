@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../../app/app_routes.dart';
 import '../../../../core/config/app_config.dart';
@@ -19,6 +21,68 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _accessNoticeShown = false;
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _schoolController = TextEditingController();
+  final TextEditingController _majorController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  bool _controllersInitialized = false;
+  bool _isEditing = false;
+  bool _isSaving = false;
+  String? _lastUid;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _schoolController.dispose();
+    _majorController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    if (!AppConfig.isFirebaseEnabled) return;
+    final uid = ref.read(currentUserProvider)?.uid;
+    if (uid == null) return;
+
+    setState(() => _isSaving = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'displayName': _nameController.text.trim(),
+        'school': _schoolController.text.trim(),
+        'major': _majorController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Also update Auth profile display name
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser != null && firebaseUser.displayName != _nameController.text.trim()) {
+        await firebaseUser.updateDisplayName(_nameController.text.trim());
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cập nhật hồ sơ thành công!')),
+        );
+        setState(() {
+          _isEditing = false;
+          _isSaving = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lưu hồ sơ thất bại: $e')),
+        );
+        setState(() => _isSaving = false);
+      }
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -45,6 +109,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final role = ref.watch(userRoleProvider).value ?? UserRoles.student;
     final top = MediaQuery.paddingOf(context).top;
 
+    final profileAsync = ref.watch(userProfileProvider);
+    if (user?.uid != _lastUid) {
+      _lastUid = user?.uid;
+      _controllersInitialized = false;
+    }
+
+    if (profileAsync.hasValue && !_controllersInitialized) {
+      final data = profileAsync.value!;
+      _nameController.text = data['displayName']?.toString() ?? user?.displayName ?? '';
+      _schoolController.text = data['school']?.toString() ?? '';
+      _majorController.text = data['major']?.toString() ?? '';
+      _phoneController.text = data['phone']?.toString() ?? '';
+      _controllersInitialized = true;
+    }
+
     return ColoredBox(
       color: StitchColors.background,
       child: ListView(
@@ -58,11 +137,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
                   color: StitchColors.secondaryContainer.withValues(alpha: 0.45),
-                  boxShadow: [
-                    BoxShadow(color: StitchColors.ambientShadow, blurRadius: 20, offset: const Offset(0, 8)),
+                  boxShadow: const [
+                    BoxShadow(color: StitchColors.ambientShadow, blurRadius: 20, offset: Offset(0, 8)),
                   ],
                 ),
-                child: Icon(Icons.person_rounded, size: 44, color: StitchColors.onSecondaryContainer),
+                child: const Icon(Icons.person_rounded, size: 44, color: StitchColors.onSecondaryContainer),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -117,10 +196,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             runSpacing: 10,
             children: [
               _profileActionButton(
-                icon: Icons.edit_outlined,
-                label: 'Chỉnh sửa hồ sơ',
-                onTap: () {},
-                isPrimary: true,
+                icon: _isEditing ? Icons.close_rounded : Icons.edit_outlined,
+                label: _isEditing ? 'Hủy' : 'Chỉnh sửa hồ sơ',
+                onTap: () {
+                  setState(() {
+                    _isEditing = !_isEditing;
+                    if (!_isEditing) {
+                      _controllersInitialized = false;
+                    }
+                  });
+                },
+                isPrimary: !_isEditing,
               ),
               _profileActionButton(
                 icon: Icons.cloud_upload_outlined,
@@ -216,22 +302,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 children: [
                   TextField(
-                    decoration: InputDecoration(
+                    controller: _nameController,
+                    enabled: _isEditing,
+                    decoration: const InputDecoration(
                       labelText: 'Họ và tên',
-                      hintText: user?.displayName,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const TextField(decoration: InputDecoration(labelText: 'Trường')),
-                  const SizedBox(height: 12),
-                  const TextField(decoration: InputDecoration(labelText: 'Chuyên ngành')),
-                  const SizedBox(height: 12),
-                  const TextField(decoration: InputDecoration(labelText: 'Số điện thoại')),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Thông tin hồ sơ sẽ giúp nhà tuyển dụng đánh giá bạn nhanh hơn.',
-                    style: GoogleFonts.inter(fontSize: 12, color: StitchColors.onSurfaceVariant),
+                  TextField(
+                    controller: _schoolController,
+                    enabled: _isEditing,
+                    decoration: const InputDecoration(
+                      labelText: 'Trường',
+                    ),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _majorController,
+                    enabled: _isEditing,
+                    decoration: const InputDecoration(
+                      labelText: 'Chuyên ngành',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _phoneController,
+                    enabled: _isEditing,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Số điện thoại',
+                    ),
+                  ),
+                  if (_isEditing) ...[
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: StitchColors.ctaGradient,
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: _isSaving ? null : _saveProfile,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Center(
+                                child: _isSaving
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Lưu thay đổi',
+                                        style: GoogleFonts.manrope(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 15,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Thông tin hồ sơ sẽ giúp nhà tuyển dụng đánh giá bạn nhanh hơn.',
+                      style: GoogleFonts.inter(fontSize: 12, color: StitchColors.onSurfaceVariant),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -246,8 +394,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       decoration: BoxDecoration(
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: const Offset(0, 6)),
+        boxShadow: const [
+          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: Offset(0, 6)),
         ],
       ),
       child: Column(

@@ -130,6 +130,7 @@ class _AppliedJobsScreenState extends ConsumerState<AppliedJobsScreen> {
                             subtitle: '${item.companyName} • ${item.location}',
                             status: item.status,
                             dateLabel: 'Ứng tuyển ${dateFormat.format(item.appliedAt)}',
+                            feedback: item.feedback,
                             onRemove: () => ref.read(appliedJobsProvider.notifier).remove(item.applicationId),
                           );
                         },
@@ -266,6 +267,7 @@ class _AppliedActivityCard extends StatelessWidget {
     required this.status,
     required this.dateLabel,
     required this.onRemove,
+    this.feedback = '',
   });
 
   final String title;
@@ -273,6 +275,7 @@ class _AppliedActivityCard extends StatelessWidget {
   final String status;
   final String dateLabel;
   final VoidCallback onRemove;
+  final String feedback;
 
   @override
   Widget build(BuildContext context) {
@@ -283,8 +286,8 @@ class _AppliedActivityCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 20, offset: const Offset(0, 8)),
+        boxShadow: const [
+          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 20, offset: Offset(0, 8)),
         ],
       ),
       child: Column(
@@ -335,23 +338,68 @@ class _AppliedActivityCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: StitchColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              dateLabel.toUpperCase(),
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: StitchColors.onSurfaceVariant,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: StitchColors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  dateLabel.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: StitchColors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (feedback.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: StitchColors.tertiaryContainer.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: StitchColors.tertiaryContainer.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.chat_bubble_outline_rounded, color: StitchColors.tertiary, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        'PHẢN HỒI TỪ NHÀ TUYỂN DỤNG',
+                        style: GoogleFonts.inter(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: StitchColors.tertiary,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    feedback,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: StitchColors.onSurface,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+          ],
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [

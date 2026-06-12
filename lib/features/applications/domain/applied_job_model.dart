@@ -14,6 +14,10 @@ class AppliedJobModel {
   final String location;
   final String status;
   final DateTime appliedAt;
+  final String feedback;
+  final String cvName;
+  final String cvDownloadUrl;
+  final String cvFileBase64;
 
   const AppliedJobModel({
     required this.applicationId,
@@ -26,6 +30,10 @@ class AppliedJobModel {
     required this.location,
     required this.status,
     required this.appliedAt,
+    this.feedback = '',
+    this.cvName = '',
+    this.cvDownloadUrl = '',
+    this.cvFileBase64 = '',
   });
 
   factory AppliedJobModel.fromJob(
@@ -33,6 +41,9 @@ class AppliedJobModel {
     required String userId,
     required String applicantName,
     required String applicantEmail,
+    String cvName = '',
+    String cvDownloadUrl = '',
+    String cvFileBase64 = '',
   }) {
     final now = DateTime.now();
     return AppliedJobModel(
@@ -46,6 +57,10 @@ class AppliedJobModel {
       location: job.location,
       status: 'submitted',
       appliedAt: now,
+      feedback: '',
+      cvName: cvName,
+      cvDownloadUrl: cvDownloadUrl,
+      cvFileBase64: cvFileBase64,
     );
   }
 
@@ -61,6 +76,10 @@ class AppliedJobModel {
       location: map['location']?.toString() ?? '',
       status: map['status']?.toString() ?? 'submitted',
       appliedAt: DateTime.tryParse(map['appliedAt']?.toString() ?? '') ?? DateTime.now(),
+      feedback: map['feedback']?.toString() ?? '',
+      cvName: map['cvName']?.toString() ?? '',
+      cvDownloadUrl: map['cvDownloadUrl']?.toString() ?? '',
+      cvFileBase64: map['cvFileBase64']?.toString() ?? '',
     );
   }
 
@@ -76,6 +95,10 @@ class AppliedJobModel {
       'location': location,
       'status': status,
       'appliedAt': appliedAt.toIso8601String(),
+      'feedback': feedback,
+      'cvName': cvName,
+      'cvDownloadUrl': cvDownloadUrl,
+      'cvFileBase64': cvFileBase64,
     };
   }
 }

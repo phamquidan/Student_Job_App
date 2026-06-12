@@ -5,7 +5,7 @@ import 'stitch_colors.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
-    final colorScheme = ColorScheme(
+    const colorScheme = ColorScheme(
       brightness: Brightness.light,
       primary: StitchColors.primary,
       onPrimary: StitchColors.onPrimary,
@@ -19,7 +19,7 @@ class AppTheme {
       onTertiary: Colors.white,
       tertiaryContainer: StitchColors.tertiaryContainer,
       onTertiaryContainer: StitchColors.onSurface,
-      error: const Color(0xFFB31B25),
+      error: Color(0xFFB31B25),
       onError: Colors.white,
       surface: StitchColors.surface,
       onSurface: StitchColors.onSurface,
@@ -108,8 +108,8 @@ class AppTheme {
         margin: EdgeInsets.zero,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: StitchColors.surfaceContainerLowest.withOpacity(0.92),
-        indicatorColor: StitchColors.primary.withOpacity(0.12),
+        backgroundColor: StitchColors.surfaceContainerLowest.withValues(alpha: 0.92),
+        indicatorColor: StitchColors.primary.withValues(alpha: 0.12),
         labelTextStyle: WidgetStateProperty.all(
           GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700),
         ),
@@ -130,7 +130,7 @@ class AppTheme {
           borderSide: const BorderSide(color: StitchColors.primary, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        hintStyle: GoogleFonts.inter(color: StitchColors.outline.withOpacity(0.65)),
+        hintStyle: GoogleFonts.inter(color: StitchColors.outline.withValues(alpha: 0.65)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

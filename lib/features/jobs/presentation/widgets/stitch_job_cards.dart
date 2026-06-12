@@ -26,11 +26,11 @@ class StitchFeaturedJobCard extends StatelessWidget {
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: StitchColors.surfaceContainer),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: StitchColors.ambientShadow,
             blurRadius: 24,
-            offset: const Offset(0, 8),
+            offset: Offset(0, 8),
           ),
         ],
       ),
@@ -58,7 +58,7 @@ class StitchFeaturedJobCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.business, size: 20, color: StitchColors.onSurfaceVariant),
+              const Icon(Icons.business, size: 20, color: StitchColors.onSurfaceVariant),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -74,7 +74,7 @@ class StitchFeaturedJobCard extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(Icons.location_on_outlined, size: 20, color: StitchColors.onSurfaceVariant),
+              const Icon(Icons.location_on_outlined, size: 20, color: StitchColors.onSurfaceVariant),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(

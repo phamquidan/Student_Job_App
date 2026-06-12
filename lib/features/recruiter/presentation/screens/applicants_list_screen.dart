@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/config/cv_utils.dart';
+
 import '../../../../core/config/app_config.dart';
 import '../../../../core/config/app_strings.dart';
 import '../../../../core/config/job_ui_labels.dart';
@@ -23,6 +25,9 @@ class _ApplicantItem {
     required this.location,
     required this.status,
     required this.appliedAt,
+    this.cvName,
+    this.cvDownloadUrl,
+    this.cvFileBase64,
   });
 
   final String id;
@@ -35,6 +40,9 @@ class _ApplicantItem {
   final String location;
   final String status;
   final DateTime appliedAt;
+  final String? cvName;
+  final String? cvDownloadUrl;
+  final String? cvFileBase64;
 }
 
 typedef _RecruiterJobSummary = ({
@@ -46,7 +54,9 @@ typedef _RecruiterJobSummary = ({
 });
 
 class ApplicantsListScreen extends StatefulWidget {
-  const ApplicantsListScreen({super.key});
+  const ApplicantsListScreen({super.key, this.selectedJobId});
+
+  final String? selectedJobId;
 
   @override
   State<ApplicantsListScreen> createState() => _ApplicantsListScreenState();
@@ -54,7 +64,13 @@ class ApplicantsListScreen extends StatefulWidget {
 
 class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
   String _sort = 'newest';
-  String _selectedJobId = 'all';
+  late String _selectedJobId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedJobId = widget.selectedJobId ?? 'all';
+  }
 
   Stream<List<_RecruiterJobSummary>> _recruiterJobsStream() {
     if (!AppConfig.isFirebaseEnabled || FirebaseAuth.instance.currentUser == null) {
@@ -84,12 +100,21 @@ class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
     if (!AppConfig.isFirebaseEnabled) {
       return Stream.value(const <_ApplicantItem>[]);
     }
+    
+    if (_selectedJobId == 'all' && recruiterJobIds.isEmpty) {
+      return Stream.value(const <_ApplicantItem>[]);
+    }
+
     Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection('applications')
         .orderBy('appliedAt', descending: true);
+        
     if (_selectedJobId != 'all') {
       query = query.where('jobId', isEqualTo: _selectedJobId);
+    } else {
+      query = query.where('jobId', whereIn: recruiterJobIds.toList());
     }
+
     return query
         .snapshots()
         .map((snapshot) {
@@ -108,8 +133,11 @@ class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
               location: data['location']?.toString() ?? '',
               status: data['status']?.toString() ?? 'submitted',
               appliedAt: appliedAt,
+              cvName: data['cvName']?.toString(),
+              cvDownloadUrl: data['cvDownloadUrl']?.toString(),
+              cvFileBase64: data['cvFileBase64']?.toString(),
             );
-          }).where((item) => recruiterJobIds.contains(item.jobId)).toList();
+          }).toList();
 
           if (_sort == 'newest') {
             items.sort((a, b) => b.appliedAt.compareTo(a.appliedAt));
@@ -132,7 +160,7 @@ class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
     }
   }
 
-  Future<void> _updateStatus(_ApplicantItem item, String status) async {
+  Future<void> _updateStatus(_ApplicantItem item, String status, String? feedback) async {
     try {
       final batch = FirebaseFirestore.instance.batch();
       final rootRef = FirebaseFirestore.instance.collection('applications').doc(item.id);
@@ -141,9 +169,22 @@ class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
           .doc(item.userId)
           .collection('applications')
           .doc(item.id);
-      batch.set(rootRef, {'status': status, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-      batch.set(userRef, {'status': status, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+      
+      final updateData = {
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'feedback': feedback ?? '',
+        'feedbackAt': feedback != null ? FieldValue.serverTimestamp() : null,
+      };
+
+      batch.set(rootRef, updateData, SetOptions(merge: true));
+      batch.set(userRef, updateData, SetOptions(merge: true));
       await batch.commit();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cập nhật trạng thái ứng viên thành công.')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -152,29 +193,109 @@ class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
     }
   }
 
+  Future<void> _showStatusUpdateDialog(_ApplicantItem item, String newStatus) async {
+    final feedbackController = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Cập nhật trạng thái: ${newStatus == "interview" ? "Phỏng vấn" : newStatus == "reviewing" ? "Đang xem xét" : "Đã nộp"}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Gửi kèm phản hồi hoặc thông tin (ví dụ: ngày giờ phỏng vấn, liên kết Zoom/lý do...):'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: feedbackController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Nhập ghi chú phản hồi cho ứng viên (tùy chọn)...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final feedback = feedbackController.text.trim();
+      await _updateStatus(item, newStatus, feedback.isNotEmpty ? feedback : null);
+    }
+  }
+
   Future<void> _openPrimaryCv(_ApplicantItem item) async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(item.userId)
-          .collection('cvs')
-          .where('isPrimary', isEqualTo: true)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isEmpty) {
+      String url = '';
+      String base64Str = '';
+      String filename = 'CV.pdf';
+
+      if ((item.cvDownloadUrl != null && item.cvDownloadUrl!.isNotEmpty) ||
+          (item.cvFileBase64 != null && item.cvFileBase64!.isNotEmpty)) {
+        url = item.cvDownloadUrl ?? '';
+        base64Str = item.cvFileBase64 ?? '';
+        filename = item.cvName ?? 'CV.pdf';
+      } else {
+        // Fallback for older application documents
+        final snapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(item.userId)
+            .collection('cvs')
+            .where('isPrimary', isEqualTo: true)
+            .limit(1)
+            .get();
+        if (snapshot.docs.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ứng viên chưa đính kèm CV.')),
+          );
+          return;
+        }
+        
+        final docData = snapshot.docs.first.data();
+        url = docData['downloadUrl']?.toString() ?? '';
+        base64Str = docData['fileBase64']?.toString() ?? '';
+        filename = docData['name']?.toString() ?? 'CV.pdf';
+      }
+
+      String targetUrl = '';
+      if (url.isNotEmpty && !url.contains('base64')) {
+        targetUrl = url;
+      } else if (base64Str.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đang chuẩn bị xem CV trực tuyến...'), duration: Duration(seconds: 2)),
+          );
+        }
+        targetUrl = await CvUtils.uploadBase64ToTmpFiles(base64Str, filename);
+      }
+
+      if (targetUrl.isNotEmpty) {
+        // Sử dụng Google Docs Viewer để xem trực tuyến trên di động mà không tải về máy
+        final viewerUrl = 'https://docs.google.com/viewer?url=${Uri.encodeComponent(targetUrl)}';
+        final uri = Uri.tryParse(viewerUrl);
+        if (uri == null) return;
+        
+        final ok = await launchUrl(uri, mode: LaunchMode.inAppWebView);
+        if (!ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không mở được CV.')),
+          );
+        }
+      } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ứng viên chưa có CV chính.')),
-        );
-        return;
-      }
-      final url = snapshot.docs.first.data()['downloadUrl']?.toString() ?? '';
-      final uri = Uri.tryParse(url);
-      if (uri == null) return;
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không mở được CV.')),
+          const SnackBar(content: Text('Dữ liệu CV của ứng viên không hợp lệ.')),
         );
       }
     } catch (e) {
@@ -416,7 +537,7 @@ class _ApplicantsListScreenState extends State<ApplicantsListScreen> {
                                   for (final item in items) ...[
                                     _ApplicantCard(
                                       data: item,
-                                      onStatusChange: (status) => _updateStatus(item, status),
+                                      onStatusChange: (status) => _showStatusUpdateDialog(item, status),
                                       onViewCv: () => _openPrimaryCv(item),
                                     ),
                                     const SizedBox(height: 16),
@@ -491,8 +612,8 @@ class _ApplicantCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: const Offset(0, 6)),
+        boxShadow: const [
+          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: Offset(0, 6)),
         ],
       ),
       child: Column(

@@ -1,12 +1,14 @@
-import 'dart:io';
+import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../../../core/config/cv_utils.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/config/app_strings.dart';
@@ -45,7 +47,6 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
 
   FirebaseAuth get _auth => FirebaseAuth.instance;
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
-  FirebaseStorage get _storage => FirebaseStorage.instance;
 
   @override
   void initState() {
@@ -142,42 +143,57 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
     if (!mounted || result == null || result.files.isEmpty) return;
     final file = result.files.first;
 
+    // Giới hạn kích thước file tối đa 5MB cho Firebase Storage
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File quá lớn (tối đa 5MB). Vui lòng chọn tệp nhỏ hơn.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _uploading = true);
     try {
-      final ext = (file.extension ?? '').toLowerCase();
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final path = 'cvs/${user.uid}/$now-$safeName';
-      final ref = _storage.ref(path);
-      final metadata = SettableMetadata(
-        contentType: ext == 'pdf'
-            ? 'application/pdf'
-            : ext == 'doc'
-                ? 'application/msword'
-                : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      );
-
-      if (file.bytes != null) {
-        await ref.putData(file.bytes!, metadata);
-      } else if (file.path != null) {
-        await ref.putFile(
-          // ignore: avoid_redundant_argument_values
-          File(file.path!),
-          metadata,
-        );
-      } else {
+      final fileBytes = file.bytes;
+      if (fileBytes == null) {
         throw StateError('Không đọc được dữ liệu file.');
       }
 
-      final url = await ref.getDownloadURL();
-      final cvDoc = _firestore.collection('users').doc(user.uid).collection('cvs').doc();
+      String downloadUrl = '';
+      String storagePath = '';
+      String base64String = '';
 
+      try {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('cvs')
+            .child(user.uid)
+            .child('${DateTime.now().millisecondsSinceEpoch}_${file.name}');
+        final uploadTask = storageRef.putData(fileBytes);
+        final snapshot = await uploadTask;
+        downloadUrl = await snapshot.ref.getDownloadURL();
+        storagePath = storageRef.fullPath;
+      } catch (e) {
+        // Fallback to Base64 in firestore if storage fails
+        const maxFirestoreSizeBytes = 750 * 1024; // 750KB limit for base64
+        if (file.size > maxFirestoreSizeBytes) {
+          throw StateError('Tải lên Storage thất bại và tệp quá lớn (>750KB) để lưu bằng Base64. Chi tiết lỗi Storage: $e');
+        }
+        base64String = base64Encode(fileBytes);
+      }
+
+      final cvDoc = _firestore.collection('users').doc(user.uid).collection('cvs').doc();
       final hadPrimary = _files.any((f) => f.primary);
+      
       await cvDoc.set({
         'name': file.name,
         'sizeBytes': file.size,
-        'storagePath': path,
-        'downloadUrl': url,
+        'fileBase64': base64String,
+        'downloadUrl': downloadUrl,
+        'storagePath': storagePath,
         'isPrimary': !hadPrimary,
         'uploadedAt': FieldValue.serverTimestamp(),
       });
@@ -218,13 +234,53 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
   }
 
   Future<void> _openCv(_CvFile file) async {
-    final url = Uri.tryParse(file.downloadUrl);
-    if (url == null) return;
-    final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
+    setState(() => _loading = true);
+    try {
+      String targetUrl = '';
+      if (file.downloadUrl.isNotEmpty && !file.downloadUrl.contains('base64')) {
+        targetUrl = file.downloadUrl;
+      } else {
+        final user = _auth.currentUser;
+        if (user == null) return;
+        
+        final doc = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('cvs')
+            .doc(file.id)
+            .get();
+        
+        final data = doc.data();
+        final base64Str = data?['fileBase64']?.toString();
+        if (base64Str == null || base64Str.isEmpty) {
+          throw Exception('Dữ liệu CV không khả dụng.');
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đang chuẩn bị xem CV trực tuyến...'), duration: Duration(seconds: 2)),
+          );
+        }
+
+        targetUrl = await CvUtils.uploadBase64ToTmpFiles(base64Str, file.name);
+      }
+
+      // Sử dụng Google Docs Viewer để xem trực tuyến trên di động mà không tải về máy
+      final viewerUrl = 'https://docs.google.com/viewer?url=${Uri.encodeComponent(targetUrl)}';
+      final uri = Uri.tryParse(viewerUrl);
+      if (uri == null) throw Exception('Đường dẫn tệp không hợp lệ.');
+
+      final ok = await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      if (!ok && mounted) {
+        throw Exception('Không thể mở tệp trình duyệt.');
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không mở được file CV.')),
+        SnackBar(content: Text('Không mở được file CV: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -274,11 +330,11 @@ class _UploadCvScreenState extends State<UploadCvScreen> {
                         Container(
                           width: 72,
                           height: 72,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: StitchColors.secondaryContainer,
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(Icons.cloud_upload_rounded, size: 36, color: StitchColors.secondary),
+                          child: const Icon(Icons.cloud_upload_rounded, size: 36, color: StitchColors.secondary),
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -417,8 +473,8 @@ class _DocumentRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 10, offset: const Offset(0, 4)),
+        boxShadow: const [
+          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Row(

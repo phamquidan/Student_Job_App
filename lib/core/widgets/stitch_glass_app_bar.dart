@@ -31,11 +31,11 @@ class StitchGlassBackBar extends StatelessWidget {
             border: Border(
               bottom: BorderSide(color: StitchColors.surfaceContainer.withValues(alpha: 0.85)),
             ),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
                 color: StitchColors.ambientShadow,
                 blurRadius: 12,
-                offset: const Offset(0, 4),
+                offset: Offset(0, 4),
               ),
             ],
           ),

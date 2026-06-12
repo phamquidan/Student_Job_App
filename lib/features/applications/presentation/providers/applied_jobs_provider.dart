@@ -85,6 +85,10 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
       'appliedAt': appliedAt is Timestamp
           ? appliedAt.toDate().toIso8601String()
           : DateTime.now().toIso8601String(),
+      'feedback': map['feedback'],
+      'cvName': map['cvName'],
+      'cvDownloadUrl': map['cvDownloadUrl'],
+      'cvFileBase64': map['cvFileBase64'],
     });
   }
 
@@ -98,7 +102,7 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
   }
 
   /// Returns `false` when Firebase is enabled but the user is not signed in.
-  Future<bool> apply(JobModel job) async {
+  Future<bool> apply(JobModel job, {Map<String, dynamic>? selectedCv}) async {
     if (AppConfig.isFirebaseEnabled && _auth.currentUser == null) {
       return false;
     }
@@ -116,6 +120,9 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
       userId: uid,
       applicantName: name,
       applicantEmail: email,
+      cvName: selectedCv?['name']?.toString() ?? '',
+      cvDownloadUrl: selectedCv?['downloadUrl']?.toString() ?? '',
+      cvFileBase64: selectedCv?['fileBase64']?.toString() ?? '',
     );
     final next = [latest, ...current];
     await _persist(next, latestApplication: latest);
@@ -194,7 +201,7 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
         return;
       }
       if (latestApplication != null) {
-        await collection.doc(latestApplication.applicationId).set({
+        final docData = {
           'jobId': latestApplication.jobId,
           'userId': latestApplication.userId,
           'applicantName': latestApplication.applicantName,
@@ -204,18 +211,14 @@ class AppliedJobsNotifier extends StateNotifier<AsyncValue<List<AppliedJobModel>
           'location': latestApplication.location,
           'status': latestApplication.status,
           'appliedAt': FieldValue.serverTimestamp(),
-        });
+          'cvName': latestApplication.cvName,
+          'cvDownloadUrl': latestApplication.cvDownloadUrl,
+          'cvFileBase64': latestApplication.cvFileBase64,
+        };
+        await collection.doc(latestApplication.applicationId).set(docData);
         await _firestore.collection('applications').doc(latestApplication.applicationId).set({
+          ...docData,
           'applicationId': latestApplication.applicationId,
-          'jobId': latestApplication.jobId,
-          'userId': latestApplication.userId,
-          'applicantName': latestApplication.applicantName,
-          'applicantEmail': latestApplication.applicantEmail,
-          'title': latestApplication.title,
-          'companyName': latestApplication.companyName,
-          'location': latestApplication.location,
-          'status': latestApplication.status,
-          'appliedAt': FieldValue.serverTimestamp(),
         });
       }
       return;

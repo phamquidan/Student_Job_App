@@ -96,37 +96,199 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _showSourceFilter(BuildContext context) {
-    final current = ref.read(sourceFilterProvider);
+  void _showAdvancedFilters(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: StitchColors.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Nguồn tin', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-            ),
-            for (final e in JobUiLabels.sourceOptions)
-              RadioListTile<String>(
-                value: e.id,
-                groupValue: current,
-                title: Text(e.label),
-                onChanged: (v) {
-                  if (v != null) {
-                    ref.read(sourceFilterProvider.notifier).state = v;
-                  }
-                  Navigator.pop(ctx);
-                },
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final currentSource = ref.watch(sourceFilterProvider);
+            final currentLoc = ref.watch(locationFilterProvider);
+            final currentSal = ref.watch(salaryFilterProvider);
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-          ],
-        ),
-      ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Bộ lọc nâng cao',
+                            style: GoogleFonts.manrope(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Nguồn tin section
+                      Text(
+                        'Nguồn tin',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: StitchColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final opt in JobUiLabels.sourceOptions)
+                            _FilterChipPill(
+                              label: opt.label,
+                              selected: currentSource == opt.id,
+                              onTap: () => ref.read(sourceFilterProvider.notifier).state = opt.id,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Địa điểm section
+                      Text(
+                        'Địa điểm',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: StitchColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _FilterChipPill(
+                            label: 'Tất cả',
+                            selected: currentLoc == 'all',
+                            onTap: () => ref.read(locationFilterProvider.notifier).state = 'all',
+                          ),
+                          _FilterChipPill(
+                            label: 'TP.HCM',
+                            selected: currentLoc == 'TP.HCM',
+                            onTap: () => ref.read(locationFilterProvider.notifier).state = 'TP.HCM',
+                          ),
+                          _FilterChipPill(
+                            label: 'Hà Nội',
+                            selected: currentLoc == 'Hà Nội',
+                            onTap: () => ref.read(locationFilterProvider.notifier).state = 'Hà Nội',
+                          ),
+                          _FilterChipPill(
+                            label: 'Đà Nẵng',
+                            selected: currentLoc == 'Đà Nẵng',
+                            onTap: () => ref.read(locationFilterProvider.notifier).state = 'Đà Nẵng',
+                          ),
+                          _FilterChipPill(
+                            label: 'Khác',
+                            selected: currentLoc == 'Khác',
+                            onTap: () => ref.read(locationFilterProvider.notifier).state = 'Khác',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Mức lương section
+                      Text(
+                        'Mức lương',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: StitchColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _FilterChipPill(
+                            label: 'Tất cả',
+                            selected: currentSal == 'all',
+                            onTap: () => ref.read(salaryFilterProvider.notifier).state = 'all',
+                          ),
+                          _FilterChipPill(
+                            label: 'Thỏa thuận',
+                            selected: currentSal == 'negotiable',
+                            onTap: () => ref.read(salaryFilterProvider.notifier).state = 'negotiable',
+                          ),
+                          _FilterChipPill(
+                            label: 'Dưới 5 triệu',
+                            selected: currentSal == 'under_5m',
+                            onTap: () => ref.read(salaryFilterProvider.notifier).state = 'under_5m',
+                          ),
+                          _FilterChipPill(
+                            label: 'Từ 5 triệu trở lên',
+                            selected: currentSal == 'above_5m',
+                            onTap: () => ref.read(salaryFilterProvider.notifier).state = 'above_5m',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: () {
+                                ref.read(sourceFilterProvider.notifier).state = 'all';
+                                ref.read(locationFilterProvider.notifier).state = 'all';
+                                ref.read(salaryFilterProvider.notifier).state = 'all';
+                              },
+                              child: const Text('Xóa bộ lọc'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: StitchColors.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Áp dụng'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -195,7 +357,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onSearchChanged: (v) => ref.read(jobSearchProvider.notifier).state = v,
                     quickTag: quickTag,
                     onQuickTag: (v) => ref.read(quickTagProvider.notifier).state = v,
-                    onOpenSourceFilter: () => _showSourceFilter(context),
+                    onOpenSourceFilter: () => _showAdvancedFilters(context),
                   ),
                 ),
               ),
@@ -440,7 +602,7 @@ class _SearchAndChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chips = JobUiLabels.quickTagOptions;
+    const chips = JobUiLabels.quickTagOptions;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -24,11 +24,11 @@ class AuthCardScaffold extends StatelessWidget {
               decoration: BoxDecoration(
                 color: StitchColors.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
                     color: StitchColors.ambientShadow,
                     blurRadius: 32,
-                    offset: const Offset(0, 16),
+                    offset: Offset(0, 16),
                   ),
                 ],
               ),

@@ -49,6 +49,66 @@ class RecruiterJobsRepository {
     });
   }
 
+  Future<void> updateJob({
+    required String jobId,
+    required String title,
+    required String companyName,
+    required String location,
+    required String salaryText,
+    required String jobType,
+    required String category,
+    required String description,
+  }) async {
+    if (!AppConfig.isFirebaseEnabled) {
+      throw StateError('Firebase chưa sẵn sàng.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Bạn cần đăng nhập để cập nhật tin.');
+    }
+
+    await _firestore.collection('jobs').doc(jobId).update({
+      'title': title.trim(),
+      'companyName': companyName.trim(),
+      'location': location.trim(),
+      'salaryText': salaryText.trim(),
+      'jobType': jobType,
+      'category': category,
+      'description': description.trim(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> deleteJob(String jobId) async {
+    if (!AppConfig.isFirebaseEnabled) {
+      throw StateError('Firebase chưa sẵn sàng.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Bạn cần đăng nhập để xóa tin.');
+    }
+
+    await _firestore.collection('jobs').doc(jobId).delete();
+  }
+
+  Future<void> updateJobStatus(String jobId, String status) async {
+    if (!AppConfig.isFirebaseEnabled) {
+      throw StateError('Firebase chưa sẵn sàng.');
+    }
+
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Bạn cần đăng nhập để thay đổi trạng thái tin.');
+    }
+
+    await _firestore.collection('jobs').doc(jobId).update({
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   JobModel fromFirestoreDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const <String, dynamic>{};
     final map = <String, dynamic>{
@@ -66,6 +126,7 @@ class RecruiterJobsRepository {
       'applyType': data['applyType'],
       'applyUrl': data['applyUrl'],
       'createdBy': data['createdBy'],
+      'status': data['status'],
     };
     return JobModel.fromMap(map);
   }

@@ -40,6 +40,21 @@ final userRoleProvider = StreamProvider<String>((ref) {
       );
 });
 
+final userProfileProvider = StreamProvider<Map<String, dynamic>>((ref) {
+  if (!AppConfig.isFirebaseEnabled) {
+    return Stream.value(const <String, dynamic>{});
+  }
+
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) {
+    return Stream.value(const <String, dynamic>{});
+  }
+
+  return FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots().map(
+        (snapshot) => snapshot.data() ?? const <String, dynamic>{},
+      );
+});
+
 final isRecruiterProvider = Provider<bool>((ref) {
   final role = ref.watch(userRoleProvider).value;
   return UserRoles.isRecruiter(role);

@@ -94,7 +94,7 @@ class _ManagePostsScreenState extends ConsumerState<ManagePostsScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Expanded(
+                              const Expanded(
                                 child: _StatTile(
                                   icon: Icons.groups_rounded,
                                   value: '—',
@@ -201,8 +201,8 @@ class _StatTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: const Offset(0, 6)),
+          boxShadow: const [
+            BoxShadow(color: StitchColors.ambientShadow, blurRadius: 16, offset: Offset(0, 6)),
           ],
         ),
         child: Column(
@@ -252,7 +252,7 @@ class _MessagesStrip extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: StitchColors.outline),
+          const Icon(Icons.chevron_right, color: StitchColors.outline),
         ],
       ),
     );
@@ -304,8 +304,8 @@ class _RecruiterJobCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: StitchColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 12, offset: const Offset(0, 4)),
+        boxShadow: const [
+          BoxShadow(color: StitchColors.ambientShadow, blurRadius: 12, offset: Offset(0, 4)),
         ],
       ),
       child: Column(

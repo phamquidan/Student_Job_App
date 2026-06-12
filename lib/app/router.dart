@@ -138,12 +138,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.recruiterPostJob,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const PostJobScreen(),
+        builder: (_, state) => PostJobScreen(jobToEdit: state.extra as JobModel?),
       ),
       GoRoute(
         path: AppRoutes.recruiterApplicants,
         parentNavigatorKey: rootNavigatorKey,
-        builder: (_, __) => const ApplicantsListScreen(),
+        builder: (_, state) => ApplicantsListScreen(selectedJobId: state.extra as String?),
       ),
     ],
   );
